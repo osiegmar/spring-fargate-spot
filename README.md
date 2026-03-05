@@ -15,7 +15,10 @@ In 2023, AWS announced they improved this behavior – see [AWS announcement fro
 
 > Additionally, Amazon ECS will now deregister your task running on Fargate Spot, if it receives a spot termination notice, before issuing a SIGTERM message to inform the task that it needs to stop.
 
-As of this writing (September 2025), I cannot confirm that this change applies – at least not in the eu-central-1 (Frankfurt) region.
+However, this does not appear to work reliably:
+- In September 2025, multiple users [reported](https://github.com/aws/containers-roadmap/issues/2673) 502 errors correlating with Fargate Spot interruptions, with logs showing the `SpotInterruption` event arriving at the same time or even *after* the SIGTERM signal – the opposite of the promised behavior.
+- The official [Fargate capacity providers documentation](https://docs.aws.amazon.com/AmazonECS/latest/developerguide/fargate-capacity-providers.html) covers Spot interruptions in detail (SIGTERM, two-minute warning, stopTimeout) but does not mention automatic load balancer deregistration at all.
+- An [AWS-authored Lambda workaround](https://gist.github.com/jicowan/ad5e13d12577b41a22f83ed91a3e61bf) (created in 2021, last updated November 2023) explicitly states: *"ECS Fargate tasks that are stopped by Spot interruptions are not deregistered from load balancers automatically."*
 
 The graceful shutdown feature of Spring Boot (since version 2.3) is designed to handle `SIGTERM` signals by **allowing existing requests** to complete before shutting down. However, upon receiving `SIGTERM`, it immediately **rejects any new requests**. As stated in the [Spring Boot documentation](https://docs.spring.io/spring-boot/reference/web/graceful-shutdown.html):
 
@@ -36,9 +39,9 @@ An alternative approach would be to programmatically deregister the task from th
 
 ## Demonstration
 
-This demo application exposed two endpoints:
+This demo application exposes two endpoints:
 
-- A root endpoint `/` that imply returns "Hello, World!".
+- A root endpoint `/` that simply returns "Hello, World!".
 - A standard actuator health endpoint `/actuator/health`.
 
 When the application is running normally, both endpoints return HTTP 200 OK status:
